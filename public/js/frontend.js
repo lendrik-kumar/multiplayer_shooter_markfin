@@ -1,262 +1,199 @@
 const canvas = document.querySelector('canvas')
 const c = canvas.getContext('2d')
-
 const socket = io()
 
-const scoreEl = document.querySelector('#scoreEl')
-
 const devicePixelRatio = window.devicePixelRatio || 1
-
 canvas.width = 1024 * devicePixelRatio
 canvas.height = 576 * devicePixelRatio
-
 c.scale(devicePixelRatio, devicePixelRatio)
 
-const x = canvas.width / 2
-const y = canvas.height / 2
+const frontEndPlayers = {}     
+const frontEndProjectiles = {}  
 
-const frontEndPlayers = {}
-const frontEndProjectiles = {}
+function safeUpper(s) { return (s || '').toUpperCase() }
 
 socket.on('updateProjectiles', (backEndProjectiles) => {
   for (const id in backEndProjectiles) {
-    const backEndProjectile = backEndProjectiles[id]
-
+    const b = backEndProjectiles[id]
     if (!frontEndProjectiles[id]) {
+      const owner = b.owner || frontEndPlayers[b.playerId]?.character
       frontEndProjectiles[id] = new Projectile({
-        x: backEndProjectile.x,
-        y: backEndProjectile.y,
+        x: b.x,
+        y: b.y,
         radius: 5,
-        color: frontEndPlayers[backEndProjectile.playerId]?.color,
-        velocity: backEndProjectile.velocity
+        owner,
+        velocity: b.velocity
       })
     } else {
-      frontEndProjectiles[id].x += backEndProjectiles[id].velocity.x
-      frontEndProjectiles[id].y += backEndProjectiles[id].velocity.y
+      frontEndProjectiles[id].x = b.x
+      frontEndProjectiles[id].y = b.y
     }
   }
 
-  for (const frontEndProjectileId in frontEndProjectiles) {
-    if (!backEndProjectiles[frontEndProjectileId]) {
-      delete frontEndProjectiles[frontEndProjectileId]
-    }
+  for (const id in frontEndProjectiles) {
+    if (!backEndProjectiles[id]) delete frontEndProjectiles[id]
   }
 })
 
 socket.on('updatePlayers', (backEndPlayers) => {
   for (const id in backEndPlayers) {
-    const backEndPlayer = backEndPlayers[id]
-
+    const bp = backEndPlayers[id]
     if (!frontEndPlayers[id]) {
       frontEndPlayers[id] = new Player({
-        x: backEndPlayer.x,
-        y: backEndPlayer.y,
+        x: bp.x,
+        y: bp.y,
         radius: 10,
-        color: backEndPlayer.color,
-        username: backEndPlayer.username
+        character: bp.character,
+        username: safeUpper(bp.character)
       })
-
-      document.querySelector(
-        '#playerLabels'
-      ).innerHTML += `<div data-id="${id}" data-score="${backEndPlayer.score}">${backEndPlayer.username}: ${backEndPlayer.score}</div>`
-    } else {
-      document.querySelector(
-        `div[data-id="${id}"]`
-      ).innerHTML = `${backEndPlayer.username}: ${backEndPlayer.score}`
-
-      document
-        .querySelector(`div[data-id="${id}"]`)
-        .setAttribute('data-score', backEndPlayer.score)
-
-      // sorts the players divs
-      const parentDiv = document.querySelector('#playerLabels')
-      const childDivs = Array.from(parentDiv.querySelectorAll('div'))
-
-      childDivs.sort((a, b) => {
-        const scoreA = Number(a.getAttribute('data-score'))
-        const scoreB = Number(b.getAttribute('data-score'))
-
-        return scoreB - scoreA
-      })
-
-      // removes old elements
-      childDivs.forEach((div) => {
-        parentDiv.removeChild(div)
-      })
-
-      // adds sorted elements
-      childDivs.forEach((div) => {
-        parentDiv.appendChild(div)
-      })
-
-      frontEndPlayers[id].target = {
-        x: backEndPlayer.x,
-        y: backEndPlayer.y
+      const exists = document.querySelector(`div[data-id="${id}"]`)
+      if (!exists) {
+        document.querySelector('#playerLabels').insertAdjacentHTML(
+          'beforeend',
+          `<div data-id="${id}" data-score="${bp.score}">${safeUpper(bp.character)}: ${bp.score}</div>`
+        )
       }
+    }
 
-      if (id === socket.id) {
-        const lastBackendInputIndex = playerInputs.findIndex((input) => {
-          return backEndPlayer.sequenceNumber === input.sequenceNumber
-        })
+    const p = frontEndPlayers[id]
+    p.dead = !!bp.dead
+    p.target = { x: bp.x, y: bp.y }
+    p.character = bp.character
 
-        if (lastBackendInputIndex > -1)
-          playerInputs.splice(0, lastBackendInputIndex + 1)
-
-        playerInputs.forEach((input) => {
-          frontEndPlayers[id].target.x += input.dx
-          frontEndPlayers[id].target.y += input.dy
-        })
-      }
+    const el = document.querySelector(`div[data-id="${id}"]`)
+    if (el) {
+      el.innerHTML = `${safeUpper(bp.character)}: ${bp.score}`
+      el.setAttribute('data-score', bp.score)
     }
   }
 
-  // this is where we delete frontend players
   for (const id in frontEndPlayers) {
     if (!backEndPlayers[id]) {
-      const divToDelete = document.querySelector(`div[data-id="${id}"]`)
-      divToDelete.parentNode.removeChild(divToDelete)
-
-      if (id === socket.id) {
-        document.querySelector('#usernameForm').style.display = 'block'
-      }
-
+      const el = document.querySelector(`div[data-id="${id}"]`)
+      if (el && el.parentNode) el.parentNode.removeChild(el)
       delete frontEndPlayers[id]
     }
   }
+
+  const parent = document.querySelector('#playerLabels')
+  const children = Array.from(parent.querySelectorAll('div'))
+  children.sort((a, b) => Number(b.dataset.score) - Number(a.dataset.score))
+  children.forEach((d) => parent.appendChild(d))
 })
 
 let animationId
 function animate() {
   animationId = requestAnimationFrame(animate)
-  // c.fillStyle = 'rgba(0, 0, 0, 0.1)'
   c.clearRect(0, 0, canvas.width, canvas.height)
 
+  c.fillStyle = "rgba(0, 0, 0, 0.5)"  
+  c.fillRect(0, 0, canvas.width, canvas.height)
+
   for (const id in frontEndPlayers) {
-    const frontEndPlayer = frontEndPlayers[id]
-
-    // linear interpolation
-    if (frontEndPlayer.target) {
-      frontEndPlayers[id].x +=
-        (frontEndPlayers[id].target.x - frontEndPlayers[id].x) * 0.5
-      frontEndPlayers[id].y +=
-        (frontEndPlayers[id].target.y - frontEndPlayers[id].y) * 0.5
+    const p = frontEndPlayers[id]
+    if (p.target) {
+      p.x += (p.target.x - p.x) * 0.5
+      p.y += (p.target.y - p.y) * 0.5
     }
-
-    frontEndPlayer.draw()
+    if (!p.dead) p.draw()
   }
 
   for (const id in frontEndProjectiles) {
-    const frontEndProjectile = frontEndProjectiles[id]
-    frontEndProjectile.draw()
+    frontEndProjectiles[id].draw()
   }
-
-  // for (let i = frontEndProjectiles.length - 1; i >= 0; i--) {
-  //   const frontEndProjectile = frontEndProjectiles[i]
-  //   frontEndProjectile.update()
-  // }
 }
-
 animate()
 
-const keys = {
-  w: {
-    pressed: false
-  },
-  a: {
-    pressed: false
-  },
-  s: {
-    pressed: false
-  },
-  d: {
-    pressed: false
-  }
-}
-
+const keys = { w:{pressed:false}, a:{pressed:false}, s:{pressed:false}, d:{pressed:false} }
 const SPEED = 5
 const playerInputs = []
 let sequenceNumber = 0
+
 setInterval(() => {
+  const me = frontEndPlayers[socket.id]
+  if (!me || me.dead) return
+
   if (keys.w.pressed) {
     sequenceNumber++
     playerInputs.push({ sequenceNumber, dx: 0, dy: -SPEED })
-    // frontEndPlayers[socket.id].y -= SPEED
     socket.emit('keydown', { keycode: 'KeyW', sequenceNumber })
   }
-
   if (keys.a.pressed) {
     sequenceNumber++
     playerInputs.push({ sequenceNumber, dx: -SPEED, dy: 0 })
-    // frontEndPlayers[socket.id].x -= SPEED
     socket.emit('keydown', { keycode: 'KeyA', sequenceNumber })
   }
-
   if (keys.s.pressed) {
     sequenceNumber++
     playerInputs.push({ sequenceNumber, dx: 0, dy: SPEED })
-    // frontEndPlayers[socket.id].y += SPEED
     socket.emit('keydown', { keycode: 'KeyS', sequenceNumber })
   }
-
   if (keys.d.pressed) {
     sequenceNumber++
     playerInputs.push({ sequenceNumber, dx: SPEED, dy: 0 })
-    // frontEndPlayers[socket.id].x += SPEED
     socket.emit('keydown', { keycode: 'KeyD', sequenceNumber })
   }
 }, 15)
 
-window.addEventListener('keydown', (event) => {
-  if (!frontEndPlayers[socket.id]) return
-
-  switch (event.code) {
-    case 'KeyW':
-      keys.w.pressed = true
-      break
-
-    case 'KeyA':
-      keys.a.pressed = true
-      break
-
-    case 'KeyS':
-      keys.s.pressed = true
-      break
-
-    case 'KeyD':
-      keys.d.pressed = true
-      break
-  }
+window.addEventListener('keydown', (e) => {
+  const me = frontEndPlayers[socket.id]
+  if (!me || me.dead) return
+  if (e.code === 'KeyW') keys.w.pressed = true
+  if (e.code === 'KeyA') keys.a.pressed = true
+  if (e.code === 'KeyS') keys.s.pressed = true
+  if (e.code === 'KeyD') keys.d.pressed = true
+})
+window.addEventListener('keyup', (e) => {
+  const me = frontEndPlayers[socket.id]
+  if (!me || me.dead) return
+  if (e.code === 'KeyW') keys.w.pressed = false
+  if (e.code === 'KeyA') keys.a.pressed = false
+  if (e.code === 'KeyS') keys.s.pressed = false
+  if (e.code === 'KeyD') keys.d.pressed = false
 })
 
-window.addEventListener('keyup', (event) => {
-  if (!frontEndPlayers[socket.id]) return
-
-  switch (event.code) {
-    case 'KeyW':
-      keys.w.pressed = false
-      break
-
-    case 'KeyA':
-      keys.a.pressed = false
-      break
-
-    case 'KeyS':
-      keys.s.pressed = false
-      break
-
-    case 'KeyD':
-      keys.d.pressed = false
-      break
-  }
-})
-
-document.querySelector('#usernameForm').addEventListener('submit', (event) => {
-  event.preventDefault()
-  document.querySelector('#usernameForm').style.display = 'none'
-  socket.emit('initGame', {
-    width: canvas.width,
-    height: canvas.height,
-    devicePixelRatio,
-    username: document.querySelector('#usernameInput').value
+const overlay = document.querySelector('#characterOverlay')
+document.querySelectorAll('#characterForm button').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const character = btn.getAttribute('data-hero')
+    socket.emit('chooseCharacter', {
+      character,
+      width: canvas.width / devicePixelRatio,
+      height: canvas.height / devicePixelRatio
+    })
+    overlay.style.display = 'none'
   })
+})
+
+socket.on('characterTaken', (character) => {
+  alert(`${character} is already taken! Choose the other one.`)
+  overlay.style.display = 'flex'
+})
+socket.on('gameFull', () => {
+  alert('Game is full, only Batman vs Superman is allowed')
+  overlay.style.display = 'flex'
+})
+
+socket.on('playerDied', () => {
+  const ov = document.querySelector('#respawnOverlay')
+  const countdownEl = document.querySelector('#countdownText')
+  if (!ov || !countdownEl) return
+
+  ov.style.display = 'flex'
+  let counter = 3
+  countdownEl.textContent = `Respawning in ${counter}...`
+
+  const timer = setInterval(() => {
+    counter--
+    if (counter > 0) {
+      countdownEl.textContent = `Respawning in ${counter}...`
+    } else {
+      clearInterval(timer)
+      ov.style.display = 'none'
+      socket.emit('restart', {
+        width: canvas.width / devicePixelRatio,
+        height: canvas.height / devicePixelRatio
+      })
+    }
+  }, 1000)
 })

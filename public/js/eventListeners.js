@@ -1,35 +1,21 @@
 addEventListener('click', (event) => {
-  const canvas = document.querySelector('canvas')
-  const { top, left } = canvas.getBoundingClientRect()
-  const playerPosition = {
-    x: frontEndPlayers[socket.id].x,
-    y: frontEndPlayers[socket.id].y
-  }
+  const player = frontEndPlayers[socket.id]
+  if (!player || player.dead) return
 
-  const angle = Math.atan2(
-    event.clientY - top - playerPosition.y,
-    event.clientX - left - playerPosition.x
-  )
+  const rect = canvas.getBoundingClientRect()
+  const logicalW = canvas.width / devicePixelRatio
+  const logicalH = canvas.height / devicePixelRatio
+  const scaleX = logicalW / rect.width
+  const scaleY = logicalH / rect.height
 
-  // const velocity = {
-  //   x: Math.cos(angle) * 5,
-  //   y: Math.sin(angle) * 5
-  // }
+  const mouseX = (event.clientX - rect.left) * scaleX
+  const mouseY = (event.clientY - rect.top) * scaleY
+
+  const angle = Math.atan2(mouseY - player.y, mouseX - player.x)
 
   socket.emit('shoot', {
-    x: playerPosition.x,
-    y: playerPosition.y,
+    x: player.x,
+    y: player.y,
     angle
   })
-  // frontEndProjectiles.push(
-  //   new Projectile({
-  //     x: playerPosition.x,
-  //     y: playerPosition.y,
-  //     radius: 5,
-  //     color: 'white',
-  //     velocity
-  //   })
-  // )
-
-  console.log(frontEndProjectiles)
 })

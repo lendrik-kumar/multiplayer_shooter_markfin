@@ -1,13 +1,19 @@
 const express = require('express')
 const app = express()
 
-// socket.io setup
 const http = require('http')
 const server = http.createServer(app)
 const { Server } = require('socket.io')
-const io = new Server(server, { pingInterval: 2000, pingTimeout: 5000 })
 
-const port = 3000
+const io = new Server(server, { 
+  pingInterval: 2000, 
+  pingTimeout: 5000,
+  cors: {
+    origin: "*"
+  }
+})
+
+const port = 3001
 
 app.use(express.static('public'))
 
@@ -15,144 +21,161 @@ app.get('/', (req, res) => {
   res.sendFile(__dirname + '/index.html')
 })
 
-const backEndPlayers = {}
-const backEndProjectiles = {}
+const backEndPlayers = {}        
+const backEndProjectiles = {}     
 
 const SPEED = 5
 const RADIUS = 10
 const PROJECTILE_RADIUS = 5
 let projectileId = 0
 
+const HEROES = ['batman', 'superman']
+let usedHeroes = new Set()
+
 io.on('connection', (socket) => {
   console.log('a user connected')
-
   io.emit('updatePlayers', backEndPlayers)
 
-  socket.on('shoot', ({ x, y, angle }) => {
-    projectileId++
+  socket.on('chooseCharacter', (payload = {}) => {
+    let { character, width, height, canvasWidth, canvasHeight } = payload
 
-    const velocity = {
-      x: Math.cos(angle) * 5,
-      y: Math.sin(angle) * 5
+    width = width ?? canvasWidth ?? 1024
+    height = height ?? canvasHeight ?? 576
+
+    if (!character && usedHeroes.size === 1) {
+      character = HEROES.find(h => !usedHeroes.has(h))
     }
+
+    if (!character || !HEROES.includes(character)) character = 'batman'
+
+    if (usedHeroes.has(character)) {
+      socket.emit('characterTaken', character)
+      return
+    }
+    if (usedHeroes.size >= HEROES.length) {
+      socket.emit('gameFull')
+      return
+    }
+
+    socket.data.character = character
+
+    backEndPlayers[socket.id] = {
+      x: 1024 * Math.random(),
+      y: 576 * Math.random(),
+      character,
+      sequenceNumber: 0,
+      score: 0,
+      radius: RADIUS,
+      dead: false,
+      canvas: { width, height }
+    }
+
+    usedHeroes.add(character)
+    io.emit('updatePlayers', backEndPlayers)
+  })
+
+  socket.on('shoot', ({ x, y, angle }) => {
+    const shooter = backEndPlayers[socket.id]
+    if (!shooter || shooter.dead) return
+
+    projectileId++
+    const velocity = { x: Math.cos(angle) * 5, y: Math.sin(angle) * 5 }
 
     backEndProjectiles[projectileId] = {
       x,
       y,
       velocity,
-      playerId: socket.id
+      playerId: socket.id,         
+      owner: shooter.character      
     }
-
-    console.log(backEndProjectiles)
   })
 
-  socket.on('initGame', ({ username, width, height }) => {
+  socket.on('restart', ({ width, height }) => {
+    const player = backEndPlayers[socket.id]
+    if (!player) return
+
     backEndPlayers[socket.id] = {
+      ...player,
       x: 1024 * Math.random(),
       y: 576 * Math.random(),
-      color: `hsl(${360 * Math.random()}, 100%, 50%)`,
+      dead: false,
       sequenceNumber: 0,
-      score: 0,
-      username
+      canvas: { width: width ?? player.canvas?.width ?? 1024, height: height ?? player.canvas?.height ?? 576 }
     }
 
-    // where we init our canvas
-    backEndPlayers[socket.id].canvas = {
-      width,
-      height
-    }
-
-    backEndPlayers[socket.id].radius = RADIUS
-  })
-
-  socket.on('disconnect', (reason) => {
-    console.log(reason)
-    delete backEndPlayers[socket.id]
     io.emit('updatePlayers', backEndPlayers)
   })
 
   socket.on('keydown', ({ keycode, sequenceNumber }) => {
-    const backEndPlayer = backEndPlayers[socket.id]
+    const p = backEndPlayers[socket.id]
+    if (!p || p.dead) return
 
-    if (!backEndPlayers[socket.id]) return
-
-    backEndPlayers[socket.id].sequenceNumber = sequenceNumber
+    p.sequenceNumber = sequenceNumber
     switch (keycode) {
-      case 'KeyW':
-        backEndPlayers[socket.id].y -= SPEED
-        break
-
-      case 'KeyA':
-        backEndPlayers[socket.id].x -= SPEED
-        break
-
-      case 'KeyS':
-        backEndPlayers[socket.id].y += SPEED
-        break
-
-      case 'KeyD':
-        backEndPlayers[socket.id].x += SPEED
-        break
+      case 'KeyW': p.y -= SPEED; break
+      case 'KeyA': p.x -= SPEED; break
+      case 'KeyS': p.y += SPEED; break
+      case 'KeyD': p.x += SPEED; break
     }
 
-    const playerSides = {
-      left: backEndPlayer.x - backEndPlayer.radius,
-      right: backEndPlayer.x + backEndPlayer.radius,
-      top: backEndPlayer.y - backEndPlayer.radius,
-      bottom: backEndPlayer.y + backEndPlayer.radius
+    const left   = p.x - p.radius
+    const right  = p.x + p.radius
+    const top    = p.y - p.radius
+    const bottom = p.y + p.radius
+
+    if (left < 0) p.x = p.radius
+    if (right > 1024) p.x = 1024 - p.radius
+    if (top < 0) p.y = p.radius
+    if (bottom > 576) p.y = 576 - p.radius
+  })
+
+  socket.on('disconnect', (reason) => {
+    console.log('user disconnected:', reason)
+    if (backEndPlayers[socket.id]) {
+      usedHeroes.delete(backEndPlayers[socket.id].character)
+      delete backEndPlayers[socket.id]
     }
-
-    if (playerSides.left < 0) backEndPlayers[socket.id].x = backEndPlayer.radius
-
-    if (playerSides.right > 1024)
-      backEndPlayers[socket.id].x = 1024 - backEndPlayer.radius
-
-    if (playerSides.top < 0) backEndPlayers[socket.id].y = backEndPlayer.radius
-
-    if (playerSides.bottom > 576)
-      backEndPlayers[socket.id].y = 576 - backEndPlayer.radius
+    io.emit('updatePlayers', backEndPlayers)
   })
 })
 
-// backend ticker
 setInterval(() => {
-  // update projectile positions
   for (const id in backEndProjectiles) {
-    backEndProjectiles[id].x += backEndProjectiles[id].velocity.x
-    backEndProjectiles[id].y += backEndProjectiles[id].velocity.y
+    const proj = backEndProjectiles[id]
+    if (!backEndPlayers[proj.playerId]) {
+      delete backEndProjectiles[id]
+      continue
+    }
 
-    const PROJECTILE_RADIUS = 5
+    proj.x += proj.velocity.x
+    proj.y += proj.velocity.y
+
+    const shooterCanvas = backEndPlayers[proj.playerId]?.canvas
     if (
-      backEndProjectiles[id].x - PROJECTILE_RADIUS >=
-        backEndPlayers[backEndProjectiles[id].playerId]?.canvas?.width ||
-      backEndProjectiles[id].x + PROJECTILE_RADIUS <= 0 ||
-      backEndProjectiles[id].y - PROJECTILE_RADIUS >=
-        backEndPlayers[backEndProjectiles[id].playerId]?.canvas?.height ||
-      backEndProjectiles[id].y + PROJECTILE_RADIUS <= 0
+      proj.x - PROJECTILE_RADIUS >= (shooterCanvas?.width ?? 1024) ||
+      proj.x + PROJECTILE_RADIUS <= 0 ||
+      proj.y - PROJECTILE_RADIUS >= (shooterCanvas?.height ?? 576) ||
+      proj.y + PROJECTILE_RADIUS <= 0
     ) {
       delete backEndProjectiles[id]
       continue
     }
 
     for (const playerId in backEndPlayers) {
-      const backEndPlayer = backEndPlayers[playerId]
+      const target = backEndPlayers[playerId]
+      if (target.dead) continue
+      if (playerId === proj.playerId) continue
 
-      const DISTANCE = Math.hypot(
-        backEndProjectiles[id].x - backEndPlayer.x,
-        backEndProjectiles[id].y - backEndPlayer.y
-      )
+      const dist = Math.hypot(proj.x - target.x, proj.y - target.y)
+      if (dist < PROJECTILE_RADIUS + target.radius) {
+        if (backEndPlayers[proj.playerId]) {
+          backEndPlayers[proj.playerId].score++
+        }
 
-      // collision detection
-      if (
-        DISTANCE < PROJECTILE_RADIUS + backEndPlayer.radius &&
-        backEndProjectiles[id].playerId !== playerId
-      ) {
-        if (backEndPlayers[backEndProjectiles[id].playerId])
-          backEndPlayers[backEndProjectiles[id].playerId].score++
+        target.dead = true
+        io.to(playerId).emit('playerDied', { character: target.character })
 
-        console.log(backEndPlayers[backEndProjectiles[id].playerId])
         delete backEndProjectiles[id]
-        delete backEndPlayers[playerId]
         break
       }
     }
@@ -160,10 +183,8 @@ setInterval(() => {
 
   io.emit('updateProjectiles', backEndProjectiles)
   io.emit('updatePlayers', backEndPlayers)
-}, 15)
+}, 30)
 
-server.listen(port, () => {
-  console.log(`Example app listening on port ${port}`)
+server.listen(port,"0.0.0.0",  () => {
+  console.log(`Server listening on port ${port}`)
 })
-
-console.log('server did load')

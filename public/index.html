@@ -1,142 +1,99 @@
-<html>
+<!DOCTYPE html>
+<html lang="en">
   <head>
-    <style>
-      body {
-        margin: 0;
-        background: linear-gradient(135deg, #0ea5e9, #3b82f6);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        height: 100vh;
-        overflow: hidden;
-        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-        color: white;
-      }
-
-      canvas {
-        width: 100%;
-        height: 100%;
-        max-width: 1280px;
-        max-height: 720px;
-        background-image: url('/img/webb-dark.png');
-        background-size: cover;
-        background-position: center;
-        border-radius: 16px;
-        box-shadow: 0px 0px 30px rgba(255, 255, 255, 0.4),
-                    0px 0px 40px rgba(59, 130, 246, 0.6);
-      }
-
-      /* Leaderboard */
-      #leaderboard {
-        position: absolute;
-        top: 20px;
-        left: 20px;
-        background: rgba(0, 0, 0, 0.6);
-        padding: 12px 18px;
-        border-radius: 10px;
-        font-size: 16px;
-        width: 180px;
-        backdrop-filter: blur(8px);
-        box-shadow: 0 0 20px rgba(59, 130, 246, 0.6);
-      }
-      #leaderboard h3 {
-        margin: 0 0 8px 0;
-        font-size: 18px;
-        color: #38bdf8;
-        text-align: center;
-      }
-      #playerLabels {
-        font-size: 14px;
-        line-height: 1.6;
-      }
-
-      /* Username overlay */
-      #usernameOverlay {
-        position: absolute;
-        top: 0;
-        right: 0;
-        bottom: 0;
-        left: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        /* backdrop-filter: blur(6px); */
-        background: rgba(0, 0, 0, 0.3);
-      }
-      #usernameForm {
-        background: rgba(30, 41, 59, 0.9);
-        backdrop-filter: blur(4px);
-        padding: 30px;
-        border-radius: 15px;
-        text-align: center;
-        box-shadow: 0px 0px 20px rgba(0, 0, 0, 0.8);
-      }
-      #usernameInput {
-        padding: 12px 20px;
-        border-radius: 25px;
-        border: none;
-        width: 220px;
-        font-size: 16px;
-        background: #475569;
-        color: #e2e8f0;
-        outline: none;
-        text-align: center;
-      }
-      #usernameInput::placeholder {
-        color: #94a3b8;
-      }
-      #usernameForm button {
-        margin-top: 15px;
-        padding: 10px 30px;
-        font-size: 16px;
-        border: none;
-        border-radius: 30px;
-        cursor: pointer;
-        background-image: linear-gradient(to right, #06b6d4, #3b82f6);
-        color: white;
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-      }
-      #usernameForm button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0px 5px 15px rgba(59, 130, 246, 0.5);
-      }
-
-      /* Responsive tweaks */
-      @media (max-width: 768px) {
-        canvas {
-          max-width: 95%;
-          max-height: 60%;
-        }
-        #leaderboard {
-          width: 140px;
-          font-size: 14px;
-        }
-      }
-    </style>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Batman vs Superman</title>
+    <script src="https://cdn.tailwindcss.com"></script>
   </head>
-  <body>
-    <!-- Leaderboard -->
-    <div id="leaderboard">
-      <h3>Leaderboard</h3>
-      <div id="playerLabels"></div>
+  <body
+    class="relative m-0 h-screen w-screen overflow-hidden bg-slate-900 font-sans text-white"
+  >
+    <div
+      id="leaderboard"
+      class="absolute top-5 left-5 w-[160px] md:w-[200px] rounded-lg border-4 border-blue-500 bg-black p-3 md:p-4 text-xs md:text-sm text-white shadow-[4px_4px_0px_#34a853] z-50" 
+      style="font-family: 'Press Start 2P', cursive;"
+    >
+      <h3 class="mb-3 text-center text-sm md:text-base font-bold text-[#4285F4]">
+        🏆 Leaderboard
+      </h3>
+      <div id="playerLabels" class="leading-relaxed space-y-1"></div>
     </div>
 
-    <!-- Canvas -->
-    <canvas></canvas>
+    <canvas
+      class="absolute inset-0 h-full w-full bg-cover bg-center z-0"
+      style="background-image: url('/img/batman-vs-superman-showdown-desktop-wallpaper-4k.jpg')"
+    ></canvas>
 
-    <!-- Username overlay -->
-    <div id="usernameOverlay">
-      <form id="usernameForm">
-        <div>
-          <input id="usernameInput" type="text" placeholder="Enter Username" />
-        </div>
-        <div>
-          <button type="submit">Start Game</button>
+    <!-- <div
+      id="usernameOverlay"
+      class="absolute inset-0 flex items-center justify-center bg-black/60 "
+    >
+      <form
+        id="usernameForm"
+        class="flex flex-col items-center gap-y-6 border-4 border-black bg-white p-10 text-center shadow-[8px_8px_0px_0px_rgba(0,0,0,0.8)]"
+        style="font-family: 'Press Start 2P', cursive;"
+      >
+        <input
+          id="usernameInput"
+          type="text"
+          placeholder="Enter Username"
+          class="w-64 border-4 border-gray-800 bg-gray-50 py-4 px-3 text-center text-gray-800 placeholder-gray-400 focus:border-blue-500 focus:outline-none"
+        />
+        <button
+          type="submit"
+          class="border-4 border-black bg-gradient-to-r from-blue-500 via-red-500 to-yellow-500 py-3 px-6 text-sm font-bold text-white shadow-[4px_4px_0px_0px_rgba(0,0,0,0.8)] transition-transform duration-150 hover:translate-x-1 hover:translate-y-1"
+        >
+          Start Game
+        </button>
+      </form>
+    </div> -->
+
+    <div
+    id="characterOverlay"
+    class="absolute inset-0 flex items-center justify-center bg-black/50"
+    >
+      <form
+      id="characterForm"
+      class="flex flex-col items-center gap-y-6 border-4 border-black bg-white p-10 text-center shadow-[8px_8px_0px_0px_rgba(0,0,0,0.8)]"
+      style="font-family: 'Press Start 2P', cursive;"
+      >
+      <h2 class="text-xl text-black font-bold">Choose Your Hero</h2>
+        <div class="flex gap-x-6">
+          <button
+            type="button"
+            data-hero="batman"
+            class="border-4 border-black bg-yellow-400 px-6 py-3 font-bold hover:bg-yellow-500"
+          >
+            Batman
+          </button>
+          <button
+            type="button"
+            data-hero="superman"
+            class="border-4 border-black bg-blue-500 px-6 py-3 font-bold text-white hover:bg-blue-600"
+          >
+            Superman
+          </button>
         </div>
       </form>
     </div>
 
-    <!-- Scripts -->
+    <div
+      id="respawnOverlay"
+      class="absolute inset-0 hidden items-center justify-center bg-black/80 z-50"
+      style="font-family: 'Press Start 2P', cursive;"
+    >
+      <div class="text-center border-4 border-yellow-400 bg-slate-900 px-6 py-8 shadow-[6px_6px_0px_#ea4335] rounded-lg">
+          <h2 class="text-lg md:text-xl mb-6 font-bold text-[#34A853]">
+            💥 You got hit!
+          </h2>
+            <p id="countdownText" class="text-sm md:text-base text-[#FBBC05]">
+              Respawning in 3...
+          </p>
+      </div>
+    </div>
+
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <script
       src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.10.2/gsap.min.js"
       crossorigin="anonymous"
